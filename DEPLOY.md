@@ -20,7 +20,8 @@ git push -u origin main
 2. 使用 GitHub 账号登录
 3. 点击 "Add New Project"
 4. 导入你的 GitHub 仓库
-5. 选择项目，点击 "Deploy"
+5. **重要**：在项目设置中，进入 **Settings** → **General** → **Package Manager**，选择 **pnpm** 或 **yarn**（避免 npm 安装失败问题）
+6. 选择项目，点击 "Deploy"
 
 ### 3. 配置 Vercel Postgres 数据库
 
@@ -133,6 +134,15 @@ NEXTAUTH_URL="http://localhost:3000"
 ```
 
 ## 故障排查
+
+### 问题：npm install 失败（Exit handler never called）
+
+**解决方案**：
+1. 在 Vercel 项目设置中，进入 **Settings** → **General** → **Package Manager**
+2. 将包管理器从 `npm` 改为 `pnpm` 或 `yarn`
+3. 保存设置并重新部署
+
+这是 npm 在 Vercel 上的已知问题，使用 pnpm 或 yarn 可以解决。
 
 ### 问题：部署后无法连接数据库
 
