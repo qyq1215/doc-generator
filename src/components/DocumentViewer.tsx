@@ -285,7 +285,7 @@ export function DocumentViewer({
         </div>
 
         <TabsContent value="preview" className="mt-0 flex-1">
-          <div ref={contentRef} className="p-6 h-[655px] overflow-auto scroll-smooth">
+          <div ref={contentRef} className="p-6 h-[640px] overflow-auto scroll-smooth">
             {isEmpty ? (
               <div className="flex flex-col items-center justify-center h-full text-slate-500">
                 <FileText className="h-12 w-12 mb-4 opacity-50" />

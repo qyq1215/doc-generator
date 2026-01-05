@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { FileText, Layout, Code, TestTube, Upload, MessageSquare, Settings, Sparkles } from 'lucide-react';
 import { DOC_TYPE_CONFIG, DocumentType } from '@/lib/types';
+import UserMenu from '@/components/UserMenu';
 
 const iconMap = {
   FileText,
@@ -34,12 +35,15 @@ export default function HomePage() {
                 AI 文档生成器
               </span>
             </div>
-            <Link href="/settings">
-              <Button variant="ghost" size="sm" className="text-lg text-slate-600 hover:text-cyan-700 hover:bg-cyan-50">
-                <Settings className="h-20 w-200 mr-2" />
-                设置
-              </Button>
-            </Link>
+            <div className="flex items-center gap-4">
+              <Link href="/settings">
+                <Button variant="ghost" size="sm" className="text-slate-600 hover:text-cyan-700 hover:bg-cyan-50">
+                  <Settings className="h-4 w-4" />
+                  设置
+                </Button>
+              </Link>
+              <UserMenu />
+            </div>
           </div>
         </div>
       </nav>
