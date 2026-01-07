@@ -258,8 +258,8 @@ function extractClassInfo(node: t.ClassDeclaration, comments: CommentInfo[]): Cl
         name: t.isIdentifier(member.key) ? member.key.name :
               t.isPrivateName(member.key) ? `#${member.key.id.name}` : 'unknown',
         params: extractParams(member.params),
-        isAsync: member.async,
-        isStatic: member.static,
+        isAsync: !!member.async,
+        isStatic: !!member.static,
         visibility: t.isClassPrivateMethod(member) ? 'private' : 
                     member.accessibility || 'public',
       };
@@ -288,7 +288,7 @@ function extractFunctionInfo(
   const funcInfo: FunctionInfo = {
     name: node.id?.name || 'anonymous',
     params: extractParams(node.params),
-    isAsync: node.async,
+    isAsync: !!node.async,
     isExported: false,
     startLine: node.loc?.start.line || 0,
     endLine: node.loc?.end.line || 0,
@@ -315,7 +315,7 @@ function extractArrowFunctionInfo(
   const funcInfo: FunctionInfo = {
     name,
     params: extractParams(node.params),
-    isAsync: node.async,
+    isAsync: !!node.async,
     isExported: false,
     startLine: node.loc?.start.line || 0,
     endLine: node.loc?.end.line || 0,
