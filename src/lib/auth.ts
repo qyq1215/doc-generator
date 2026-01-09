@@ -5,6 +5,7 @@ import prisma from './prisma';
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   // 使用 JWT 策略时不需要 adapter
+  secret: process.env.AUTH_SECRET,
   session: {
     strategy: 'jwt', // 使用 JWT 而不是数据库 session
     maxAge: 7 * 24 * 60 * 60, // 7天过期
@@ -21,39 +22,47 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         password: { label: '密码', type: 'password' },
       },
       async authorize(credentials) {
-        if (!credentials?.username || !credentials?.password) {
-          throw new Error('请输入用户名和密码');
+        try {
+          if (!credentials?.username || !credentials?.password) {
+            return null;
+          }
+
+          const username = credentials.username as string;
+          const password = credentials.password as string;
+
+          // 查找用户
+          const user = await prisma.user.findUnique({
+            where: { username },
+          });
+
+          if (!user) {
+            return null;
+          }
+
+          // 验证密码
+          const isPasswordValid = await bcrypt.compare(password, user.password);
+
+          if (!isPasswordValid) {
+            return null;
+          }
+
+          return {
+            id: user.id,
+            name: user.name || user.username,
+            email: user.email,
+            image: user.image,
+          };
+        } catch (error) {
+          console.error('[Auth] 认证过程出错:', error);
+          return null;
         }
-
-        const username = credentials.username as string;
-        const password = credentials.password as string;
-
-        // 查找用户
-        const user = await prisma.user.findUnique({
-          where: { username },
-        });
-
-        if (!user) {
-          throw new Error('用户名或密码错误');
-        }
-
-        // 验证密码
-        const isPasswordValid = await bcrypt.compare(password, user.password);
-
-        if (!isPasswordValid) {
-          throw new Error('用户名或密码错误');
-        }
-
-        return {
-          id: user.id,
-          name: user.name || user.username,
-          email: user.email,
-          image: user.image,
-        };
       },
     }),
   ],
   callbacks: {
+    async signIn() {
+      return true;
+    },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
@@ -68,4 +77,3 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
   },
 });
-

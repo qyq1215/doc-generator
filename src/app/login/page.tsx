@@ -38,8 +38,14 @@ function LoginForm() {
       });
 
       if (result?.error) {
-        toast.error(result.error);
-      } else {
+        // NextAuth 的错误信息可能是英文，转换为中文
+        const errorMessage = result.error === 'CredentialsSignin' 
+          ? '用户名或密码错误' 
+          : result.error === 'Configuration'
+          ? '登录配置错误，请稍后重试'
+          : result.error;
+        toast.error(errorMessage);
+      } else if (result?.ok) {
         toast.success('登录成功');
         router.push(callbackUrl);
         router.refresh();
@@ -87,17 +93,19 @@ function LoginForm() {
             </div>
           </CardHeader>
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} autoComplete="on">
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="username" className="text-gray-700">用户名</Label>
                 <Input
                   id="username"
+                  name="username"
                   type="text"
                   placeholder="请输入用户名"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   disabled={isLoading}
+                  autoComplete="username"
                   className="border-gray-200 focus:border-cyan-500 focus:ring-cyan-500"
                 />
               </div>
@@ -106,11 +114,13 @@ function LoginForm() {
                 <Label htmlFor="password" className="text-gray-700">密码</Label>
                 <Input
                   id="password"
+                  name="password"
                   type="password"
                   placeholder="请输入密码"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={isLoading}
+                  autoComplete="current-password"
                   className="border-gray-200 focus:border-cyan-500 focus:ring-cyan-500"
                 />
               </div>

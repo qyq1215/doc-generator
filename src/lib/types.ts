@@ -155,8 +155,13 @@ export interface GenerateResult {
 // LLM配置类型
 export interface LLMConfig {
   provider: 'zhipu' | 'ernie' | 'xfyun';
-  apiKey: string;
+  apiKey: string; // 用于zhipu，或ernie的API Key部分，或xfyun的APIKey部分
   model?: string;
+  // 文心一言专用字段
+  secretKey?: string; // 文心一言的Secret Key
+  // 讯飞星火专用字段
+  appId?: string; // 讯飞星火的APPID
+  apiSecret?: string; // 讯飞星火的APISecret
 }
 
 // LLM响应类型

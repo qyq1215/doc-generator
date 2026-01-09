@@ -49,23 +49,6 @@ export default function UserMenu() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        <div className="px-2 py-1.5 text-sm text-gray-500">
-          {session.user?.name}
-        </div>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/settings" className="flex items-center cursor-pointer">
-            <Settings className="mr-2 h-4 w-4" />
-            系统设置
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="/profile" className="flex items-center cursor-pointer">
-            <User className="mr-2 h-4 w-4" />
-            个人中心
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
         <DropdownMenuItem 
           onClick={() => signOut({ callbackUrl: '/' })}
           className="text-red-600 focus:text-red-600 cursor-pointer"

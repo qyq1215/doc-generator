@@ -20,21 +20,31 @@ export class XfyunSparkAdapter extends BaseLLMAdapter {
 
   constructor(config: LLMConfig) {
     super(config);
-    this.parseApiKey(config.apiKey);
+    this.parseConfig(config);
   }
 
   /**
-   * 解析 API Key
-   * 格式: APPID:APIKey:APISecret
+   * 解析配置
+   * 支持分离字段（appId, apiKey, apiSecret）或组合格式（apiKey: APPID:APIKey:APISecret）
    */
-  private parseApiKey(apiKey: string) {
-    const parts = apiKey.split(':');
-    if (parts.length !== 3) {
-      throw new Error('讯飞星火 API Key 格式错误，正确格式: APPID:APIKey:APISecret');
+  private parseConfig(config: LLMConfig) {
+    // 优先使用分离字段
+    if (config.appId && config.apiKey && config.apiSecret) {
+      this.appId = config.appId;
+      this.apiKey = config.apiKey;
+      this.apiSecret = config.apiSecret;
+    } else if (config.apiKey && config.apiKey.includes(':')) {
+      // 使用组合格式（向后兼容）
+      const parts = config.apiKey.split(':');
+      if (parts.length !== 3) {
+        throw new Error('讯飞星火 API Key 格式错误，正确格式: APPID:APIKey:APISecret');
+      }
+      this.appId = parts[0];
+      this.apiKey = parts[1];
+      this.apiSecret = parts[2];
+    } else {
+      throw new Error('讯飞星火需要 APPID、APIKey 和 APISecret，请提供分离字段或使用格式 "APPID:APIKey:APISecret"');
     }
-    this.appId = parts[0];
-    this.apiKey = parts[1];
-    this.apiSecret = parts[2];
   }
 
   /**

@@ -9,8 +9,9 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { Download, FileText, FileJson, Loader2, Copy, Check } from 'lucide-react';
+import { Download, FileText, FileJson, Loader2, Copy, Check, File } from 'lucide-react';
 import { toast } from 'sonner';
+import { saveAs } from 'file-saver';
 
 interface ExportButtonProps {
   content: string;
@@ -162,6 +163,185 @@ ${html}
     }
   };
 
+  // 导出为 Word
+  const exportWord = async () => {
+    setIsExporting(true);
+    try {
+      // 动态导入docx库
+      const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import('docx');
+      
+      // 简单的Markdown解析，转换为docx格式
+      const paragraphs: Paragraph[] = [];
+      const lines = content.split('\n');
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmedLine = line.trim();
+        
+        if (!trimmedLine) {
+          paragraphs.push(new Paragraph({ text: '' }));
+          continue;
+        }
+        
+        // 标题
+        if (trimmedLine.startsWith('# ')) {
+          paragraphs.push(new Paragraph({
+            text: trimmedLine.substring(2),
+            heading: HeadingLevel.HEADING_1,
+          }));
+        } else if (trimmedLine.startsWith('## ')) {
+          paragraphs.push(new Paragraph({
+            text: trimmedLine.substring(3),
+            heading: HeadingLevel.HEADING_2,
+          }));
+        } else if (trimmedLine.startsWith('### ')) {
+          paragraphs.push(new Paragraph({
+            text: trimmedLine.substring(4),
+            heading: HeadingLevel.HEADING_3,
+          }));
+        } else if (trimmedLine.startsWith('#### ')) {
+          paragraphs.push(new Paragraph({
+            text: trimmedLine.substring(5),
+            heading: HeadingLevel.HEADING_3,
+          }));
+        }
+        // 代码块
+        else if (trimmedLine.startsWith('```')) {
+          const codeLines: string[] = [];
+          i++; // 跳过开始标记
+          while (i < lines.length && !lines[i].trim().startsWith('```')) {
+            codeLines.push(lines[i]);
+            i++;
+          }
+          paragraphs.push(new Paragraph({
+            children: [new TextRun({ text: codeLines.join('\n'), font: 'Courier New' })],
+          }));
+        }
+        // 普通段落
+        else {
+          // 处理内联格式
+          const textRuns: TextRun[] = [];
+          let remainingText = trimmedLine;
+          
+          // 处理粗体 **text**
+          const boldMatches = [...remainingText.matchAll(/\*\*(.+?)\*\*/g)];
+          let lastIndex = 0;
+          
+          for (const match of boldMatches) {
+            if (match.index !== undefined) {
+              if (match.index > lastIndex) {
+                textRuns.push(new TextRun({ text: remainingText.substring(lastIndex, match.index) }));
+              }
+              textRuns.push(new TextRun({ text: match[1], bold: true }));
+              lastIndex = match.index + match[0].length;
+            }
+          }
+          if (lastIndex < remainingText.length) {
+            textRuns.push(new TextRun({ text: remainingText.substring(lastIndex) }));
+          }
+          
+          paragraphs.push(new Paragraph({
+            children: textRuns.length > 0 ? textRuns : [new TextRun({ text: trimmedLine })],
+          }));
+        }
+      }
+      
+      const doc = new Document({
+        sections: [{
+          children: paragraphs.length > 0 ? paragraphs : [new Paragraph({ text: content })],
+        }],
+      });
+      
+      const blob = await Packer.toBlob(doc);
+      saveAs(blob, `${title}.docx`);
+      toast.success('Word 文件已下载');
+    } catch (error) {
+      toast.error('导出失败');
+      console.error(error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // 导出为 PDF
+  const exportPDF = async () => {
+    setIsExporting(true);
+    try {
+      // 动态导入，避免服务端执行
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
+      
+      // 创建一个临时容器来渲染Markdown内容
+      const tempDiv = document.createElement('div');
+      tempDiv.style.position = 'absolute';
+      tempDiv.style.left = '-9999px';
+      tempDiv.style.width = '800px';
+      tempDiv.style.padding = '40px';
+      tempDiv.style.backgroundColor = '#ffffff';
+      tempDiv.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      tempDiv.style.fontSize = '14px';
+      tempDiv.style.lineHeight = '1.6';
+      tempDiv.style.color = '#334155';
+      
+      // 简单的Markdown转HTML
+      let html = content
+        .replace(/^### (.*$)/gm, '<h3 style="color: #0891b2; margin-top: 1.5em;">$1</h3>')
+        .replace(/^## (.*$)/gm, '<h2 style="color: #0891b2; margin-top: 1.5em;">$1</h2>')
+        .replace(/^# (.*$)/gm, '<h1 style="color: #0891b2; border-bottom: 2px solid #99f6e4; padding-bottom: 0.3em; margin-top: 1.5em;">$1</h1>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`(.+?)`/g, '<code style="background: #ecfeff; color: #0e7490; padding: 0.2em 0.4em; border-radius: 3px;">$1</code>')
+        .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre style="background: #f1f5f9; padding: 1em; border-radius: 8px; overflow-x: auto; border: 1px solid #e2e8f0;"><code>$2</code></pre>')
+        .replace(/\n/g, '<br>');
+      
+      tempDiv.innerHTML = html;
+      document.body.appendChild(tempDiv);
+      
+      // 转换为canvas
+      const canvas = await html2canvas(tempDiv, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+      
+      document.body.removeChild(tempDiv);
+      
+      // 创建PDF
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF.jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+      
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+      
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+      
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+      
+      pdf.save(`${title}.pdf`);
+      toast.success('PDF 文件已下载');
+    } catch (error) {
+      toast.error('导出失败');
+      console.error(error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // 复制到剪贴板
   const copyToClipboard = async () => {
     try {
@@ -213,6 +393,20 @@ ${html}
         >
           <FileJson className="h-4 w-4 mr-2" />
           导出为 HTML (.html)
+        </DropdownMenuItem>
+        <DropdownMenuItem 
+          onClick={exportWord}
+          className="text-slate-700 focus:bg-cyan-50 focus:text-cyan-800 cursor-pointer"
+        >
+          <File className="h-4 w-4 mr-2" />
+          导出为 Word (.docx)
+        </DropdownMenuItem>
+        <DropdownMenuItem 
+          onClick={exportPDF}
+          className="text-slate-700 focus:bg-cyan-50 focus:text-cyan-800 cursor-pointer"
+        >
+          <FileText className="h-4 w-4 mr-2" />
+          导出为 PDF (.pdf)
         </DropdownMenuItem>
         <DropdownMenuSeparator className="bg-slate-200" />
         <DropdownMenuItem 

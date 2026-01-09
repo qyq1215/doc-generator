@@ -2,92 +2,67 @@ import { BaseLLMAdapter } from './adapter';
 import { LLMConfig, LLMResponse } from '../types';
 
 /**
- * 文心一言 (ERNIE Bot) 适配器
- * 文档: https://cloud.baidu.com/doc/WENXINWORKSHOP/index.html
+ * 文心一言 (ERNIE Bot) 适配器 - 使用千帆API v2
+ * 文档: https://cloud.baidu.com/doc/qianfan-api/s/ym9chdsy5
+ * 
+ * 千帆API只需要一个API Key，使用Bearer token方式
  */
 export class ErnieAdapter extends BaseLLMAdapter {
   name = '文心一言';
-  private baseUrl = 'https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat';
-  private accessToken: string | null = null;
-  private tokenExpiry: number = 0;
+  private baseUrl = 'https://qianfan.baidubce.com/v2/chat/completions';
 
   constructor(config: LLMConfig) {
     super(config);
-  }
-
-  /**
-   * 获取访问令牌
-   * 注意：文心一言需要 API Key 和 Secret Key 来获取 access_token
-   * 这里假设 config.apiKey 格式为 "apiKey:secretKey"
-   */
-  private async getAccessToken(): Promise<string> {
-    // 如果 token 还有效，直接返回
-    if (this.accessToken && Date.now() < this.tokenExpiry) {
-      return this.accessToken;
-    }
-
-    // 解析 API Key 和 Secret Key
-    const [apiKey, secretKey] = this.config.apiKey.split(':');
-    if (!apiKey || !secretKey) {
-      throw new Error('文心一言需要 API Key 和 Secret Key，格式为 "apiKey:secretKey"');
-    }
-
-    const response = await fetch(
-      `https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=${apiKey}&client_secret=${secretKey}`,
-      { method: 'POST' }
-    );
-
-    if (!response.ok) {
-      throw new Error('获取文心一言访问令牌失败');
-    }
-
-    const data = await response.json();
-    this.accessToken = data.access_token;
-    // 设置过期时间（提前 5 分钟刷新）
-    this.tokenExpiry = Date.now() + (data.expires_in - 300) * 1000;
-
-    return this.accessToken!;
-  }
-
-  /**
-   * 获取模型端点
-   */
-  private getModelEndpoint(): string {
-    const model = this.config.model || 'ernie-4.0-8k';
     
-    const modelEndpoints: Record<string, string> = {
-      'ernie-4.0-8k': 'completions_pro',
+    if (!config.apiKey) {
+      throw new Error('文心一言需要 API Key');
+    }
+  }
+
+  /**
+   * 获取模型名称（千帆API使用模型名称，而不是端点）
+   */
+  private getModelName(): string {
+    const model = this.config.model || 'ernie-3.5-8k';
+    
+    // 千帆API的模型名称映射
+    const modelMap: Record<string, string> = {
+      'ernie-4.0-8k': 'ernie-4.0-8k',
       'ernie-4.0-turbo-8k': 'ernie-4.0-turbo-8k',
-      'ernie-3.5-8k': 'completions',
-      'ernie-speed-8k': 'ernie_speed',
+      'ernie-3.5-8k': 'ernie-3.5-8k',
+      'ernie-speed-8k': 'ernie-speed-8k',
       'ernie-lite-8k': 'ernie-lite-8k',
     };
 
-    return modelEndpoints[model] || 'completions_pro';
+    return modelMap[model] || 'ernie-3.5-8k';
   }
 
   /**
    * 生成文档（非流式）
    */
   async generateDoc(prompt: string, systemPrompt?: string): Promise<LLMResponse> {
-    const accessToken = await this.getAccessToken();
-    const endpoint = this.getModelEndpoint();
+    const model = this.getModelName();
+    
+    // 构建消息列表
+    const messages: Array<{ role: string; content: string }> = [];
+    if (systemPrompt) {
+      messages.push({ role: 'system', content: systemPrompt });
+    }
+    messages.push({ role: 'user', content: prompt });
 
-    const response = await fetch(
-      `${this.baseUrl}/${endpoint}?access_token=${accessToken}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: [{ role: 'user', content: prompt }],
-          system: systemPrompt,
-          temperature: 0.7,
-          top_p: 0.9,
-        }),
-      }
-    );
+    const response = await fetch(this.baseUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: 0.7,
+        top_p: 0.9,
+      }),
+    });
 
     if (!response.ok) {
       const error = await response.text();
@@ -96,16 +71,17 @@ export class ErnieAdapter extends BaseLLMAdapter {
 
     const data = await response.json();
     
-    if (data.error_code) {
-      throw new Error(`文心一言API错误: ${data.error_code} - ${data.error_msg}`);
+    // 千帆API的错误格式
+    if (data.error) {
+      throw new Error(`文心一言API错误: ${data.error.code || 'unknown'} - ${data.error.message || '未知错误'}`);
     }
 
     return {
-      content: data.result || '',
+      content: data.choices?.[0]?.message?.content || '',
       usage: data.usage ? {
-        promptTokens: data.usage.prompt_tokens,
-        completionTokens: data.usage.completion_tokens,
-        totalTokens: data.usage.total_tokens,
+        promptTokens: data.usage.prompt_tokens || 0,
+        completionTokens: data.usage.completion_tokens || 0,
+        totalTokens: data.usage.total_tokens || 0,
       } : undefined,
     };
   }
@@ -118,25 +94,29 @@ export class ErnieAdapter extends BaseLLMAdapter {
     systemPrompt?: string,
     onChunk?: (chunk: string) => void
   ): Promise<LLMResponse> {
-    const accessToken = await this.getAccessToken();
-    const endpoint = this.getModelEndpoint();
+    const model = this.getModelName();
+    
+    // 构建消息列表
+    const messages: Array<{ role: string; content: string }> = [];
+    if (systemPrompt) {
+      messages.push({ role: 'system', content: systemPrompt });
+    }
+    messages.push({ role: 'user', content: prompt });
 
-    const response = await fetch(
-      `${this.baseUrl}/${endpoint}?access_token=${accessToken}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: [{ role: 'user', content: prompt }],
-          system: systemPrompt,
-          temperature: 0.7,
-          top_p: 0.9,
-          stream: true,
-        }),
-      }
-    );
+    const response = await fetch(this.baseUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: 0.7,
+        top_p: 0.9,
+        stream: true,
+      }),
+    });
 
     if (!response.ok) {
       const error = await response.text();
@@ -164,32 +144,40 @@ export class ErnieAdapter extends BaseLLMAdapter {
           if (line.startsWith('data: ')) {
             const data = line.slice(6);
             
+            // 流式响应结束标记
+            if (data === '[DONE]') {
+              continue;
+            }
+            
             try {
               const parsed = JSON.parse(data);
               
-              if (parsed.error_code) {
-                throw new Error(`文心一言API错误: ${parsed.error_code} - ${parsed.error_msg}`);
+              // 千帆API的错误格式
+              if (parsed.error) {
+                throw new Error(`文心一言API错误: ${parsed.error.code || 'unknown'} - ${parsed.error.message || '未知错误'}`);
               }
               
-              const content = parsed.result || '';
+              // 提取内容
+              const content = parsed.choices?.[0]?.delta?.content || '';
               
               if (content) {
                 fullContent += content;
                 onChunk?.(content);
               }
 
-              if (parsed.is_end && parsed.usage) {
+              // 提取usage信息（通常在最后一个chunk中）
+              if (parsed.usage) {
                 usage = {
-                  promptTokens: parsed.usage.prompt_tokens,
-                  completionTokens: parsed.usage.completion_tokens,
-                  totalTokens: parsed.usage.total_tokens,
+                  promptTokens: parsed.usage.prompt_tokens || 0,
+                  completionTokens: parsed.usage.completion_tokens || 0,
+                  totalTokens: parsed.usage.total_tokens || 0,
                 };
               }
             } catch (e) {
               if (e instanceof Error && e.message.includes('文心一言API错误')) {
                 throw e;
               }
-              // 忽略其他解析错误
+              // 忽略其他解析错误（可能是流式数据的中间片段）
             }
           }
         }

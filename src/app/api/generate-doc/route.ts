@@ -2,11 +2,12 @@ import { NextRequest } from 'next/server';
 import { GenerateRequest, LLMConfig } from '@/lib/types';
 import { DocGenerator, createMockGenerator } from '@/lib/doc-generator';
 import { cookies } from 'next/headers';
+import { getDefaultLLMConfig } from '@/lib/config';
 
 /**
- * 从 cookies 获取 LLM 配置
+ * 从 cookies 获取用户自定义的 LLM 配置
  */
-async function getLLMConfig(): Promise<LLMConfig | null> {
+async function getUserLLMConfig(): Promise<LLMConfig | null> {
   const cookieStore = await cookies();
   const configCookie = cookieStore.get('llm-config');
   
@@ -19,6 +20,32 @@ async function getLLMConfig(): Promise<LLMConfig | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * 获取 LLM 配置（优先级：用户自定义 > 环境变量 > 配置文件）
+ */
+async function getLLMConfig(): Promise<LLMConfig | null> {
+  // 1. 优先尝试从cookie读取用户自定义配置
+  const userConfig = await getUserLLMConfig();
+  if (userConfig && userConfig.apiKey) {
+    return userConfig;
+  }
+  
+  // 2. 如果用户配置不存在，尝试从环境变量或配置文件读取默认配置
+  const defaultConfig = getDefaultLLMConfig(userConfig?.provider);
+  if (defaultConfig) {
+    // 如果用户配置中指定了provider但没有apiKey，使用默认配置但保留provider
+    if (userConfig?.provider && !userConfig.apiKey) {
+      return {
+        ...defaultConfig,
+        provider: userConfig.provider,
+      };
+    }
+    return defaultConfig;
+  }
+  
+  return null;
 }
 
 /**
