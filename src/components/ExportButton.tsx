@@ -171,7 +171,7 @@ ${html}
       const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import('docx');
       
       // 简单的Markdown解析，转换为docx格式
-      const paragraphs: Paragraph[] = [];
+      const paragraphs: InstanceType<typeof Paragraph>[] = [];
       const lines = content.split('\n');
       
       for (let i = 0; i < lines.length; i++) {
@@ -220,7 +220,7 @@ ${html}
         // 普通段落
         else {
           // 处理内联格式
-          const textRuns: TextRun[] = [];
+          const textRuns: InstanceType<typeof TextRun>[] = [];
           let remainingText = trimmedLine;
           
           // 处理粗体 **text**
@@ -310,7 +310,7 @@ ${html}
       
       // 创建PDF
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF.jsPDF({
+      const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: 'a4',
